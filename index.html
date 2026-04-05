@@ -3,74 +3,158 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Artemis II & Moon Tracker</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <title>Artemis II Tracker</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; background: #0b0d17; color: white; font-family: 'Segoe UI', sans-serif; overflow: hidden; }
-        #plot { width: 100vw; height: 100vh; }
-        .ui-overlay { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 85%; z-index: 100; background: rgba(11, 13, 23, 0.85); padding: 20px; border-radius: 15px; border: 1px solid #1e2235; backdrop-filter: blur(10px); }
-        input[type=range] { width: 100%; cursor: pointer; accent-color: #00f2ff; }
-        .info-panel { display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; letter-spacing: 1px; color: #8a8f9f; }
-        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0b0d17; display: flex; justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.5s; }
-        .loading-text { font-weight: bold; letter-spacing: 5px; color: #00f2ff; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        :root { --safe-bottom: env(safe-area-inset-bottom, 20px); }
+        body { margin: 0; background-color: #050505; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #050505; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999;
+            transition: opacity 0.8s ease-out, visibility 0.8s;
+        }
+        .spinner {
+            width: 50px; height: 50px; border: 3px solid rgba(0,204,255,0.1);
+            border-top: 3px solid #00ccff; border-radius: 50%;
+            animation: spin 1s linear infinite; margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-text { font-family: 'Orbitron', sans-serif; font-size: 0.8em; color: #00ccff; letter-spacing: 4px; }
+
+        #info-panel { 
+            flex: 0 0 auto; 
+            padding: 15px 10px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 10px;
+            background: #080808; 
+            border-bottom: 1px solid #222;
+        }
+        #plot-container { flex: 0 0 55vh; width: 100%; position: relative; }
+        #controls { flex: 1 1 auto; padding: 10px 30px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
+
+        .data-block { text-align: center; }
+        .label { font-family: 'Orbitron', sans-serif; font-size: 0.55em; color: #00ccff; text-transform: uppercase; letter-spacing: 2px; }
+        .value { font-size: 1.0em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
+        
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; padding: 15px 0; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
+        
+        #plot { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
-    <div id="loading-screen"><div class="loading-text">LOADING TRAJECTORIES</div></div>
-    <div id="plot"></div>
-    <div class="ui-overlay">
-        <input type="range" id="timeSlider" min="0" value="0">
-        <div class="info-panel">
-            <span id="timeLabel">--/--/-- --:--</span>
-            <span>ARTEMIS II & MOON LIVE TRACKER</span>
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <div class="loading-text">LOADING EPHEMERIDES</div>
+    </div>
+
+    <div id="info-panel">
+        <div class="data-block">
+            <div class="label">Mission Time (GMT+2)</div>
+            <div id="current-date" class="value">---</div>
+        </div>
+        <div class="data-block">
+            <div class="label">Earth Center Distance</div>
+            <div id="current-dist" class="value">---</div>
         </div>
     </div>
 
+    <div id="plot-container">
+        <div id="plot"></div>
+    </div>
+
+    <div id="controls">
+        <div class="label">Mission Timeline (Artemis II & Moon)</div>
+        <input type="range" id="time-slider" min="0" value="0" step="1">
+    </div>
+
     <script>
-        let missionData, moonData;
-        const slider = document.getElementById('timeSlider');
-        const label = document.getElementById('timeLabel');
-        const loading = document.getElementById('loading-screen');
+        let missionData = [];
+        let moonData = [];
+        let fullX, fullY, fullZ;
+        const slider = document.getElementById('time-slider');
+        const dateLabel = document.getElementById('current-date');
+        const distLabel = document.getElementById('current-dist');
+        const loadingScreen = document.getElementById('loading-screen');
 
-        // Parametri Luna: Raggio reale in km (1737.4)
         const MOON_RADIUS = 1737.4;
-        
-        // Generazione geometria sferica per la Luna (Mesh3D)
-        function createSphereMesh(radius, divisions) {
-            let x = [], y = [], z = [], i = [], j = [], k = [];
-            
-            // Vertici
-            for (let lat = 0; lat <= divisions; lat++) {
-                const theta = (lat * Math.PI) / divisions;
-                const sinTheta = Math.sin(theta);
-                const cosTheta = Math.cos(theta);
 
-                for (let lon = 0; lon <= divisions; lon++) {
-                    const phi = (lon * 2 * Math.PI) / divisions;
-                    x.push(radius * sinTheta * Math.cos(phi));
-                    y.push(radius * sinTheta * Math.sin(phi));
-                    z.push(radius * cosTheta);
-                }
-            }
-
-            // Facce (triangoli)
-            for (let lat = 0; lat < divisions; lat++) {
-                for (let lon = 0; lon < divisions; lon++) {
-                    const first = (lat * (divisions + 1)) + lon;
-                    const second = first + divisions + 1;
-                    
-                    // Primo triangolo della faccia quadrata
-                    i.push(first); j.push(second); k.push(first + 1);
-                    // Secondo triangolo
-                    i.push(second); j.push(second + 1); k.push(first + 1);
-                }
-            }
-            return {x, y, z, i, j, k};
+        function formatGMT2(utcString) {
+            return new Date(utcString).toLocaleString('en-GB', {
+                timeZone: 'Europe/Paris',
+                day: '2-digit', month: 'short',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
         }
 
-        // Crea la geometria della sfera una volta sola (risoluzione 24 per prestazioni)
-        const sphereMesh = createSphereMesh(MOON_RADIUS, 24);
+        function createSphere(r, color, opacity, res = 18) {
+            let x = [], y = [], z = [];
+            for(let i=0; i<=res; i++) {
+                let lat = -90 + i*180/res;
+                let r_z = r * Math.sin(lat * Math.PI / 180);
+                let r_cos_lat = r * Math.cos(lat * Math.PI / 180);
+                let rowX = [], rowY = [], rowZ = [];
+                for(let j=0; j<=res; j++) {
+                    let lon = -180 + j*360/res;
+                    rowX.push(r_cos_lat * Math.cos(lon * Math.PI / 180));
+                    rowY.push(r_cos_lat * Math.sin(lon * Math.PI / 180));
+                    rowZ.push(r_z);
+                }
+                x.push(rowX); y.push(rowY); z.push(rowZ);
+            }
+            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
+        }
+
+        const layout = {
+            paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
+            scene: {
+                xaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
+                yaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
+                zaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
+                aspectmode: 'data',
+                camera: { eye: { x: 1.25, y: 1.25, z: 1.25 } }
+            },
+            showlegend: false
+        };
+
+        function updatePlot(index) {
+            const idx = parseInt(index);
+            const p = missionData[idx];
+            const targetTime = new Date(p.t).getTime();
+
+            // Sincronizzazione Luna
+            const moonPos = moonData.reduce((prev, curr) => {
+                return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
+            });
+
+            const dist = Math.sqrt(p.x**2 + p.y**2 + p.z**2);
+            dateLabel.innerText = formatGMT2(p.t);
+            distLabel.innerText = dist.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
+
+            // Sfera Luna traslata
+            const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
+            moonSphere.x = moonSphere.x.map(row => row.map(v => v + moonPos.x));
+            moonSphere.y = moonSphere.y.map(row => row.map(v => v + moonPos.y));
+            moonSphere.z = moonSphere.z.map(row => row.map(v => v + moonPos.z));
+
+            Plotly.react('plot', [
+                createSphere(6371, '#0066ff', 1), // Terra
+                moonSphere,                      // Luna
+                {
+                    x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1),
+                    mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d'
+                },
+                {
+                    x: [p.x], y: [p.y], z: [p.z],
+                    mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d'
+                }
+            ], layout);
+        }
 
         async function init() {
             try {
@@ -78,68 +162,44 @@
                 const data = await response.json();
                 missionData = data.mission;
                 moonData = data.moon;
-
-                slider.max = missionData.length - 1;
-
-                const layout = {
-                    paper_bgcolor: '#0b0d17', plot_bgcolor: '#0b0d17',
-                    margin: {l:0, r:0, b:0, t:0},
-                    scene: {
-                        xaxis: {showgrid: true, gridcolor: '#1e2235', zeroline: false, title: ''},
-                        yaxis: {showgrid: true, gridcolor: '#1e2235', zeroline: false, title: ''},
-                        zaxis: {showgrid: true, gridcolor: '#1e2235', zeroline: false, title: ''},
-                        aspectmode: 'data',
-                        camera: { eye: {x: 1.5, y: 1.5, z: 1.2} }
-                    },
-                    showlegend: true,
-                    legend: { x: 0.05, y: 0.9, font: {color: '#fff', size: 10}, bgcolor: 'rgba(0,0,0,0)' }
-                };
-
-                await Plotly.newPlot('plot', [], layout, {displayModeBar: false});
-                updatePlot(0);
                 
-                setTimeout(() => { loading.style.opacity = '0'; setTimeout(() => loading.remove(), 500); }, 800);
-            } catch (err) { console.error(err); }
+                slider.max = missionData.length - 1;
+                fullX = missionData.map(d => d.x);
+                fullY = missionData.map(d => d.y);
+                fullZ = missionData.map(d => d.z);
+
+                const now = new Date().getTime();
+                let openIndex = missionData.findIndex(d => new Date(d.t).getTime() >= now);
+                if (openIndex <= 0) openIndex = 0;
+                slider.value = openIndex;
+
+                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: false});
+                updatePlot(openIndex);
+                
+                setTimeout(() => {
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => loadingScreen.style.visibility = 'hidden', 800);
+                }, 500);
+
+            } catch (err) {
+                console.error(err);
+                document.querySelector('.loading-text').innerText = "IMPORT ERROR";
+            }
         }
 
-        function updatePlot(idx) {
-            const sat = missionData[idx];
-            const targetTime = new Date(sat.t).getTime();
+        init();
 
-            // Sincronizzazione Luna
-            const moonPos = moonData.reduce((prev, curr) => {
-                return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
-            });
-
-            // Trasla la geometria della sfera alla posizione della Luna
-            const translatedX = sphereMesh.x.map(v => v + moonPos.x);
-            const translatedY = sphereMesh.y.map(v => v + moonPos.y);
-            const translatedZ = sphereMesh.z.map(v => v + moonPos.z);
-
-            const traces = [
-                {
-                    name: 'Artemis II',
-                    type: 'scatter3d', mode: 'markers',
-                    x: [sat.x], y: [sat.y], z: [sat.z],
-                    marker: { size: 6, color: '#00f2ff', symbol: 'circle', line: {color: '#fff', width: 1} }
-                },
-                {
-                    name: 'Luna (Real Radius)',
-                    type: 'mesh3d',
-                    x: translatedX, y: translatedY, z: translatedZ,
-                    i: sphereMesh.i, j: sphereMesh.j, k: sphereMesh.k,
-                    color: '#d1d1d1', opacity: 1, flatshading: false,
-                    lighting: { diffuse: 0.8, ambient: 0.3, specular: 0.1, roughness: 0.9 }
-                }
-            ];
-
-            label.innerText = sat.t.replace('Z', '').replace('T', ' ');
-            Plotly.react('plot', traces);
-        }
-
-        slider.oninput = () => updatePlot(slider.value);
-        window.onload = init;
-        window.onresize = () => Plotly.Plots.resize('plot');
+        let frameRequested = false;
+        slider.oninput = function() {
+            if (!frameRequested) {
+                frameRequested = true;
+                requestAnimationFrame(() => {
+                    updatePlot(slider.value);
+                    frameRequested = false;
+                });
+            }
+        };
+        window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
     </script>
 </body>
 </html>
