@@ -39,7 +39,7 @@
     </div>
 
     <script>
-        let missionData = [], moonData = [], fullX, fullY, fullZ;
+        let missionData = [], fullX, fullY, fullZ;
         const slider = document.getElementById('time-slider');
         const dateLabel = document.getElementById('current-date');
         const distEarthLabel = document.getElementById('current-dist-earth');
@@ -52,19 +52,6 @@
                 timeZone: 'Europe/Paris', day: '2-digit', month: 'short',
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
-        }
-
-function findMoonPos(targetTs) {
-            // Se il target Ã¨ prima della posizione attuale, resetta il pointer
-            if (targetTs < moonData[lastMoonIdx].ts) lastMoonIdx = 0;
-            
-            for (let i = lastMoonIdx; i < moonData.length; i++) {
-                if (moonData[i].ts >= targetTs) {
-                    lastMoonIdx = i;
-                    return moonData[i];
-                }
-            }
-            return moonData[moonData.length - 1];
         }
 
         function createSphere(r, color, opacity, res = 18) {
@@ -85,10 +72,9 @@ function findMoonPos(targetTs) {
             return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
         }
 
-        // Layout con UIREVISION abilitata
         const layout = {
             paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
-            uirevision: 'constant', // Fondamentale per mantenere zoom e rotazione
+            uirevision: 'constant',
             scene: {
                 xaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 yaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
@@ -102,21 +88,19 @@ function findMoonPos(targetTs) {
         function updatePlot(index) {
             const idx = parseInt(index);
             const p = missionData[idx];
-            const targetTime = new Date(p.t).getTime();
-const moonPos = moonData.reduce((prev, curr) => {
-                return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
-            });
-            const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) -6371;
-            const distMoon = Math.sqrt((p.x - moonPos.x)**2 + (p.y - moonPos.y)**2 + (p.z - moonPos.z)**2)-MOON_RADIUS;
+            
+            // Speed optimization: mx, my, mz are now part of the mission data point
+            const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) - 6371;
+            const distMoon = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2) - MOON_RADIUS;
 
             dateLabel.innerText = formatGMT2(p.t);
             distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
             distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
             const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
-            moonSphere.x = moonSphere.x.map(row => row.map(v => v + moonPos.x));
-            moonSphere.y = moonSphere.y.map(row => row.map(v => v + moonPos.y));
-            moonSphere.z = moonSphere.z.map(row => row.map(v => v + moonPos.z));
+            moonSphere.x = moonSphere.x.map(row => row.map(v => v + p.mx));
+            moonSphere.y = moonSphere.y.map(row => row.map(v => v + p.my));
+            moonSphere.z = moonSphere.z.map(row => row.map(v => v + p.mz));
 
             Plotly.react('plot', [
                 createSphere(6371, '#0066ff', 1),
@@ -127,12 +111,11 @@ const moonPos = moonData.reduce((prev, curr) => {
             ], layout);
         }
 
-
         async function init() {
             try {
                 const response = await fetch('missionData.json');
                 const data = await response.json();
-                missionData = data.mission; moonData = data.moon;
+                missionData = data.mission; 
                 slider.max = missionData.length - 1;
                 fullX = missionData.map(d => d.x); fullY = missionData.map(d => d.y); fullZ = missionData.map(d => d.z);
 
