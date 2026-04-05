@@ -117,7 +117,7 @@
                 yaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 zaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 aspectmode: 'data',
-                camera: { eye: { x: 1.25, y: 1.25, z: 1.25 } }
+                camera: { eye: { x: -0.1, y: -0.2, z: 0.1 } } // Orientamento richiesto
             },
             showlegend: false
         };
@@ -127,7 +127,6 @@
             const p = missionData[idx];
             const targetTime = new Date(p.t).getTime();
 
-            // Sincronizzazione Luna basata sui dati Horizons
             const moonPos = moonData.reduce((prev, curr) => {
                 return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
             });
@@ -136,7 +135,6 @@
             dateLabel.innerText = formatGMT2(p.t);
             distLabel.innerText = dist.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            // Sfera Luna traslata
             const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
             moonSphere.x = moonSphere.x.map(row => row.map(v => v + moonPos.x));
             moonSphere.y = moonSphere.y.map(row => row.map(v => v + moonPos.y));
@@ -144,12 +142,12 @@
 
             Plotly.react('plot', [
                 createSphere(6371, '#0066ff', 1), // Terra
-                moonSphere,                      // Luna (Real Radius)
+                moonSphere,                      // Luna
                 { // Traiettoria Passata (Azzurra)
                     x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1),
                     mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d'
                 },
-                { // Traiettoria Futura (Gialla Trattegrata)
+                { // Traiettoria Futura (Gialla)
                     x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx),
                     mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d'
                 },
@@ -177,7 +175,7 @@
                 if (openIndex <= 0) openIndex = 0;
                 slider.value = openIndex;
 
-                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: false});
+                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: true});
                 updatePlot(openIndex);
                 
                 setTimeout(() => {
