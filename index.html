@@ -90,9 +90,7 @@
             const idx = parseInt(index);
             const p = missionData[idx];
             const targetTime = new Date(p.t).getTime();
-            const moonPos = moonData.reduce((prev, curr) => {
-                return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
-            });
+            const moonPos = findMoonPos(p.ts);
 
             const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) -6371;
             const distMoon = Math.sqrt((p.x - moonPos.x)**2 + (p.y - moonPos.y)**2 + (p.z - moonPos.z)**2)-MOON_RADIUS;
@@ -113,6 +111,17 @@
                 { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
                 { x: [p.x], y: [p.y], z: [p.z], mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d' }
             ], layout);
+        }
+
+        function findMoonPos(targetTs) {
+            let low = 0, high = moonData.length - 1;
+            while (low <= high) {
+                let mid = Math.floor((low + high) / 2);
+                if (moonData[mid].ts < targetTs) low = mid + 1;
+                else if (moonData[mid].ts > targetTs) high = mid - 1;
+                else return moonData[mid];
+            }
+            return moonData[low] || moonData[moonData.length - 1];
         }
 
         async function init() {
