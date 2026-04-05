@@ -50,7 +50,7 @@
 <body>
     <div id="loading-screen">
         <div class="spinner"></div>
-        <div class="loading-text">CALCULATING DISTANCES</div>
+        <div class="loading-text">LOADING EPHEMERIDES</div>
     </div>
 
     <div id="info-panel">
@@ -59,7 +59,7 @@
             <div id="current-date" class="value">---</div>
         </div>
         <div class="data-block">
-            <div class="label">Earth Distance</div>
+            <div class="label">Earth Center Distance</div>
             <div id="current-dist" class="value">---</div>
         </div>
     </div>
@@ -69,7 +69,7 @@
     </div>
 
     <div id="controls">
-        <div class="label">Timeline Control</div>
+        <div class="label">Mission Timeline</div>
         <input type="range" id="time-slider" min="0" value="0" step="1">
     </div>
 
@@ -172,7 +172,7 @@
 
             } catch (err) {
                 console.error(err);
-                document.querySelector('.loading-text').innerText = "FETCH ERROR";
+                document.querySelector('.loading-text').innerText = "IMPORT ERROR";
             }
         }
 
