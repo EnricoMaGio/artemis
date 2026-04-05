@@ -69,7 +69,7 @@
     </div>
 
     <div id="controls">
-        <div class="label">Mission Timeline (Artemis II & Moon)</div>
+        <div class="label">Mission Timeline (incl. Moon)</div>
         <input type="range" id="time-slider" min="0" value="0" step="1">
     </div>
 
@@ -127,7 +127,7 @@
             const p = missionData[idx];
             const targetTime = new Date(p.t).getTime();
 
-            // Sincronizzazione Luna
+            // Sincronizzazione Luna basata sui dati Horizons
             const moonPos = moonData.reduce((prev, curr) => {
                 return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
             });
@@ -136,7 +136,7 @@
             dateLabel.innerText = formatGMT2(p.t);
             distLabel.innerText = dist.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            // Sfera Luna traslata
+            // Creazione Sfera Luna dinamica
             const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
             moonSphere.x = moonSphere.x.map(row => row.map(v => v + moonPos.x));
             moonSphere.y = moonSphere.y.map(row => row.map(v => v + moonPos.y));
@@ -144,7 +144,7 @@
 
             Plotly.react('plot', [
                 createSphere(6371, '#0066ff', 1), // Terra
-                moonSphere,                      // Luna
+                moonSphere,                      // Luna (Real Radius)
                 {
                     x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1),
                     mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d'
