@@ -106,7 +106,7 @@
                 }
                 x.push(rowX); y.push(rowY); z.push(rowZ);
             }
-            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: 0.4, colorscale: [[0, '#001a33'], [1, '#0066ff']], hoverinfo: 'skip' };
+            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: 1, colorscale: [[0, '#001a33'], [1, '#0066ff']], hoverinfo: 'skip' };
         }
 
         const layout = {
@@ -169,7 +169,7 @@
                 updatePlot(openIndex);
                 
                 setTimeout(() => {
-                    loadingScreen.style.opacity = '1';
+                    loadingScreen.style.opacity = '0';
                     loadingScreen.style.visibility = 'hidden';
                 }, 500);
 
