@@ -10,35 +10,36 @@
         :root { --safe-bottom: env(safe-area-inset-bottom, 20px); }
         body { margin: 0; background-color: #050505; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
         #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.8s ease-out, visibility 0.8s; }
-        .spinner { width: 40px; height: 40px; border: 3px solid rgba(0,204,255,0.1); border-top: 3px solid #00ccff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        .spinner { width: 50px; height: 50px; border: 3px solid rgba(0,204,255,0.1); border-top: 3px solid #00ccff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loading-text { font-family: 'Orbitron', sans-serif; font-size: 0.7em; color: #00ccff; letter-spacing: 3px; }
-        #info-panel { flex: 0 0 auto; padding: 12px 5px; display: grid; grid-template-columns: 1.2fr 0.9fr 0.9fr; gap: 5px; background: #080808; border-bottom: 1px solid #222; }
-        #plot-container { flex: 1; width: 100%; position: relative; min-height: 0; }
-        #controls { flex: 0 0 auto; padding: 15px 30px; padding-bottom: calc(var(--safe-bottom) + 10px); background: #050505; }
+        .loading-text { font-family: 'Orbitron', sans-serif; font-size: 0.8em; color: #00ccff; letter-spacing: 4px; }
+        #info-panel { flex: 0 0 auto; padding: 15px 5px; display: grid; grid-template-columns: 1.2fr 0.9fr 0.9fr; gap: 5px; background: #080808; border-bottom: 1px solid #222; }
+        #plot-container { flex: 0 0 55vh; width: 100%; position: relative; }
+        #controls { flex: 1 1 auto; padding: 10px 30px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
         .data-block { text-align: center; }
-        .label { font-family: 'Orbitron', sans-serif; font-size: 0.5em; color: #00ccff; text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 4px; }
-        .value { font-size: 0.85em; font-weight: bold; color: #fff; font-family: monospace; }
-        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; height: 30px; }
+        .label { font-family: 'Orbitron', sans-serif; font-size: 0.5em; color: #00ccff; text-transform: uppercase; letter-spacing: 1.5px; }
+        .value { font-size: 0.9em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; padding: 15px 0; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
         #plot { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
-    <div id="loading-screen"><div class="spinner"></div><div class="loading-text">RENDERING TRAJECTORY</div></div>
+    <div id="loading-screen"><div class="spinner"></div><div class="loading-text">LOADING EPHEMERIDES</div></div>
     <div id="info-panel">
-        <div class="data-block"><div class="label">Time (GMT+2)</div><div id="current-date" class="value">---</div></div>
-        <div class="data-block"><div class="label">Alt Earth</div><div id="current-dist-earth" class="value">---</div></div>
-        <div class="data-block"><div class="label">Alt Moon</div><div id="current-dist-moon" class="value">---</div></div>
+        <div class="data-block"><div class="label">Mission Time (GMT+2)</div><div id="current-date" class="value">---</div></div>
+        <div class="data-block"><div class="label">Earth surface distance</div><div id="current-dist-earth" class="value">---</div></div>
+        <div class="data-block"><div class="label">Moon surface distance</div><div id="current-dist-moon" class="value">---</div></div>
     </div>
     <div id="plot-container"><div id="plot"></div></div>
     <div id="controls">
+        <div class="label">Mission Timeline</div>
         <input type="range" id="time-slider" min="0" value="0" step="1">
     </div>
 
     <script>
-        let missionData = [], fullX, fullY, fullZ;
+        let missionData = [], moonData = [], fullX, fullY, fullZ;
         const slider = document.getElementById('time-slider');
         const dateLabel = document.getElementById('current-date');
         const distEarthLabel = document.getElementById('current-dist-earth');
@@ -53,7 +54,20 @@
             });
         }
 
-        function createSphere(r, color, opacity, res = 16) {
+function findMoonPos(targetTs) {
+            // Se il target Ã¨ prima della posizione attuale, resetta il pointer
+            if (targetTs < moonData[lastMoonIdx].ts) lastMoonIdx = 0;
+            
+            for (let i = lastMoonIdx; i < moonData.length; i++) {
+                if (moonData[i].ts >= targetTs) {
+                    lastMoonIdx = i;
+                    return moonData[i];
+                }
+            }
+            return moonData[moonData.length - 1];
+        }
+
+        function createSphere(r, color, opacity, res = 18) {
             let x = [], y = [], z = [];
             for(let i=0; i<=res; i++) {
                 let lat = -90 + i*180/res;
@@ -71,15 +85,16 @@
             return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
         }
 
+        // Layout con UIREVISION abilitata
         const layout = {
             paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
-            uirevision: 'constant',
+            uirevision: 'constant', // Fondamentale per mantenere zoom e rotazione
             scene: {
-                xaxis: { showgrid: true, gridcolor: '#111', zeroline: false, color: '#444' },
-                yaxis: { showgrid: true, gridcolor: '#111', zeroline: false, color: '#444' },
-                zaxis: { showgrid: true, gridcolor: '#111', zeroline: false, color: '#444' },
+                xaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
+                yaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
+                zaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 aspectmode: 'data',
-                camera: { eye: { x: 1.2, y: 1.2, z: 0.5 } }
+                camera: { eye: { x: -0.46, y: -2.05, z: 0.51 } }
             },
             showlegend: false
         };
@@ -87,18 +102,21 @@
         function updatePlot(index) {
             const idx = parseInt(index);
             const p = missionData[idx];
-            
-            const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) - 6371;
-            const distMoon = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2) - MOON_RADIUS;
+            const targetTime = new Date(p.t).getTime();
+const moonPos = moonData.reduce((prev, curr) => {
+                return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
+            });
+            const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) -6371;
+            const distMoon = Math.sqrt((p.x - moonPos.x)**2 + (p.y - moonPos.y)**2 + (p.z - moonPos.z)**2)-MOON_RADIUS;
 
             dateLabel.innerText = formatGMT2(p.t);
-            distEarthLabel.innerText = Math.round(distEarth).toLocaleString() + " km";
-            distMoonLabel.innerText = Math.round(distMoon).toLocaleString() + " km";
+            distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
+            distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1);
-            moonSphere.x = moonSphere.x.map(row => row.map(v => v + p.mx));
-            moonSphere.y = moonSphere.y.map(row => row.map(v => v + p.my));
-            moonSphere.z = moonSphere.z.map(row => row.map(v => v + p.mz));
+            const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
+            moonSphere.x = moonSphere.x.map(row => row.map(v => v + moonPos.x));
+            moonSphere.y = moonSphere.y.map(row => row.map(v => v + moonPos.y));
+            moonSphere.z = moonSphere.z.map(row => row.map(v => v + moonPos.z));
 
             Plotly.react('plot', [
                 createSphere(6371, '#0066ff', 1),
@@ -109,10 +127,12 @@
             ], layout);
         }
 
+
         async function init() {
             try {
                 const response = await fetch('missionData.json');
-                missionData = await response.json();
+                const data = await response.json();
+                missionData = data.mission; moonData = data.moon;
                 slider.max = missionData.length - 1;
                 fullX = missionData.map(d => d.x); fullY = missionData.map(d => d.y); fullZ = missionData.map(d => d.z);
 
@@ -121,16 +141,19 @@
                 if (openIndex <= 0) openIndex = 0;
                 slider.value = openIndex;
 
-                await Plotly.newPlot('plot', [], layout, {responsive: true});
+                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: true});
                 updatePlot(openIndex);
                 
-                loadingScreen.style.opacity = '0';
-                setTimeout(() => loadingScreen.style.visibility = 'hidden', 800);
+                setTimeout(() => {
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => loadingScreen.style.visibility = 'hidden', 800);
+                }, 500);
             } catch (err) { console.error(err); }
         }
 
         init();
         slider.oninput = () => updatePlot(slider.value);
+        window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
     </script>
 </body>
 </html>
