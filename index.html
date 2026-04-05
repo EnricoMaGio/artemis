@@ -24,12 +24,21 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .loading-text { font-family: 'Orbitron', sans-serif; font-size: 0.8em; color: #00ccff; letter-spacing: 4px; }
 
-        #info-panel { flex: 0 0 auto; padding: 15px 10px 5px 10px; text-align: center; background: #050505; }
+        #info-panel { 
+            flex: 0 0 auto; 
+            padding: 15px 10px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 10px;
+            background: #080808; 
+            border-bottom: 1px solid #222;
+        }
         #plot-container { flex: 0 0 55vh; width: 100%; position: relative; }
         #controls { flex: 1 1 auto; padding: 10px 30px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
 
-        .label { font-family: 'Orbitron', sans-serif; font-size: 0.6em; color: #00ccff; text-transform: uppercase; letter-spacing: 2px; }
-        .value { font-size: 1.1em; font-weight: bold; margin-top: 5px; color: #fff; }
+        .data-block { text-align: center; }
+        .label { font-family: 'Orbitron', sans-serif; font-size: 0.55em; color: #00ccff; text-transform: uppercase; letter-spacing: 2px; }
+        .value { font-size: 1.0em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
         
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; padding: 15px 0; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
@@ -41,12 +50,18 @@
 <body>
     <div id="loading-screen">
         <div class="spinner"></div>
-        <div class="loading-text">LOADING EXTERNAL JSON</div>
+        <div class="loading-text">CALCULATING DISTANCES</div>
     </div>
 
     <div id="info-panel">
-        <div class="label">Current Time: GMT+2 - Frame: Earth-Centered Inertial</div>
-        <div id="current-date" class="value">Awaiting Data...</div>
+        <div class="data-block">
+            <div class="label">Mission Time (GMT+2)</div>
+            <div id="current-date" class="value">---</div>
+        </div>
+        <div class="data-block">
+            <div class="label">Earth Distance</div>
+            <div id="current-dist" class="value">---</div>
+        </div>
     </div>
 
     <div id="plot-container">
@@ -54,7 +69,7 @@
     </div>
 
     <div id="controls">
-        <div class="label">Mission Timeline</div>
+        <div class="label">Timeline Control</div>
         <input type="range" id="time-slider" min="0" value="0" step="1">
     </div>
 
@@ -63,14 +78,14 @@
         let fullX, fullY, fullZ;
         const slider = document.getElementById('time-slider');
         const dateLabel = document.getElementById('current-date');
+        const distLabel = document.getElementById('current-dist');
         const loadingScreen = document.getElementById('loading-screen');
 
         function formatGMT2(utcString) {
             return new Date(utcString).toLocaleString('en-GB', {
                 timeZone: 'Europe/Paris',
-                day: '2-digit', month: 'short', year: 'numeric',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                hour12: false
+                day: '2-digit', month: 'short',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
         }
 
@@ -91,15 +106,15 @@
                 }
                 x.push(rowX); y.push(rowY); z.push(rowZ);
             }
-            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: 0.5, colorscale: [[0, '#001a33'], [1, '#0066ff']], hoverinfo: 'skip' };
+            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: 0.4, colorscale: [[0, '#001a33'], [1, '#0066ff']], hoverinfo: 'skip' };
         }
 
         const layout = {
             paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
             scene: {
-                xaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'X' },
-                yaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Y' },
-                zaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Z' },
+                xaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
+                yaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
+                zaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 aspectmode: 'data'
             },
             showlegend: false
@@ -108,26 +123,30 @@
         function updatePlot(index) {
             const idx = parseInt(index);
             const p = missionData[idx];
+            
+            // Calculate Euclidean distance from center (Earth)
+            const dist = Math.sqrt(p.x**2 + p.y**2 + p.z**2);
+            
             dateLabel.innerText = formatGMT2(p.t);
+            distLabel.innerText = dist.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
             
             Plotly.react('plot', [
                 createEarth(),
                 {
                     x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1),
-                    mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d', name: 'Past'
+                    mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d'
                 },
                 {
                     x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx),
-                    mode: 'lines', line: {color: '#ffcc00', width: 2, dash: 'dash'}, type: 'scatter3d', name: 'Future'
+                    mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d'
                 },
                 {
                     x: [p.x], y: [p.y], z: [p.z],
-                    mode: 'markers', marker: {size: 5, color: '#fff', symbol: 'diamond'}, type: 'scatter3d'
+                    mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d'
                 }
             ], layout);
         }
 
-        // --- Fetch Data and Initialize ---
         async function init() {
             try {
                 const response = await fetch('missionData.json');
@@ -152,8 +171,8 @@
                 }, 500);
 
             } catch (err) {
-                console.error("Error loading JSON:", err);
-                document.querySelector('.loading-text').innerText = "ERROR LOADING DATA";
+                console.error(err);
+                document.querySelector('.loading-text').innerText = "FETCH ERROR";
             }
         }
 
