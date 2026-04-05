@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="loading-screen"><div class="spinner"></div><div class="loading-text">LOADING EPHEMERIDES</div></div>
+    <div id="loading-screen"><div class="spinner"></div><div class="loading-text">SYNCING SYSTEMS</div></div>
     <div id="info-panel">
         <div class="data-block"><div class="label">Mission Time (GMT+2)</div><div id="current-date" class="value">---</div></div>
         <div class="data-block"><div class="label">Earth surface distance</div><div id="current-dist-earth" class="value">---</div></div>
@@ -89,13 +89,13 @@
             const idx = parseInt(index);
             const p = missionData[idx];
             
-            // Speed optimization: mx, my, mz are now part of the mission data point
+            // Calcoli istantanei (mx, my, mz sono giÃ  nel punto p)
             const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) - 6371;
             const distMoon = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2) - MOON_RADIUS;
 
             dateLabel.innerText = formatGMT2(p.t);
-            distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
-            distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
+            distEarthLabel.innerText = Math.round(distEarth).toLocaleString() + " km";
+            distMoonLabel.innerText = Math.round(distMoon).toLocaleString() + " km";
 
             const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
             moonSphere.x = moonSphere.x.map(row => row.map(v => v + p.mx));
@@ -124,7 +124,7 @@
                 if (openIndex <= 0) openIndex = 0;
                 slider.value = openIndex;
 
-                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: true});
+                await Plotly.newPlot('plot', [], layout, {responsive: true});
                 updatePlot(openIndex);
                 
                 setTimeout(() => {
