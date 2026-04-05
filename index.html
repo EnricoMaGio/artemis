@@ -117,7 +117,7 @@
                 zaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 aspectmode: 'data',
                 camera: {
-                    eye: { x: -0.28, y: -2.29, z: -0.684 } 
+                    eye: { x: -0.28, y: -2.29, z: -0.2 } 
                 }
             },
             showlegend: false
@@ -165,7 +165,7 @@
                 if (openIndex <= 0) openIndex = 0;
                 slider.value = openIndex;
 
-                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: false, scrollZoom: true});
+                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: false, displayModeBar: true});
                 updatePlot(openIndex);
                 
                 setTimeout(() => {
