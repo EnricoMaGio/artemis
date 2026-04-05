@@ -136,7 +136,7 @@
             dateLabel.innerText = formatGMT2(p.t);
             distLabel.innerText = dist.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            // Creazione Sfera Luna dinamica
+            // Sfera Luna traslata
             const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
             moonSphere.x = moonSphere.x.map(row => row.map(v => v + moonPos.x));
             moonSphere.y = moonSphere.y.map(row => row.map(v => v + moonPos.y));
@@ -145,11 +145,15 @@
             Plotly.react('plot', [
                 createSphere(6371, '#0066ff', 1), // Terra
                 moonSphere,                      // Luna (Real Radius)
-                {
+                { // Traiettoria Passata (Azzurra)
                     x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1),
                     mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d'
                 },
-                {
+                { // Traiettoria Futura (Gialla Trattegrata)
+                    x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx),
+                    mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d'
+                },
+                { // Marker Navicella
                     x: [p.x], y: [p.y], z: [p.z],
                     mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d'
                 }
