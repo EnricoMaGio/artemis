@@ -2,70 +2,40 @@
 <html>
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Artemis II Mobile Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Artemis II Tracker - Axes Restored</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <style>
+        :root { --safe-bottom: env(safe-area-inset-bottom, 20px); }
         body { 
-            margin: 0; 
-            background-color: #050505; 
-            color: white; 
-            font-family: sans-serif; 
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
+            margin: 0; background-color: #050505; color: white; 
+            font-family: -apple-system, system-ui, sans-serif; 
+            display: flex; flex-direction: column; height: 100dvh; overflow: hidden;
         }
-        
-        #info-panel {
-            padding: 15px;
-            background: rgba(0, 30, 60, 0.9);
-            border-bottom: 2px solid #00ccff;
-            z-index: 10;
+        #info-panel { flex: 0 0 auto; padding: 15px 10px 5px 10px; text-align: center; }
+        #plot-container { flex: 0 0 50vh; width: 100%; position: relative; }
+        #controls { 
+            flex: 1 1 auto; display: flex; flex-direction: column; 
+            justify-content: flex-start; padding: 10px 30px; 
+            padding-bottom: calc(var(--safe-bottom) + 15px); 
         }
-
-        /* Altezza ridotta per il plot cosÃ¬ non mangia tutto lo schermo */
-        #plot-container {
-            flex-grow: 1;
-            width: 100%;
-            height: 65vh; /* Ridotto per lasciare spazio ai controlli */
-        }
-
-        #controls {
-            padding: 20px;
-            background: rgba(0, 20, 40, 0.95);
-            border-top: 1px solid rgba(0, 204, 255, 0.3);
-            z-index: 10;
-            padding-bottom: 40px; /* Spazio per la barra home di iPhone */
-        }
-
-        .label { font-family: 'Orbitron', sans-serif; font-size: 0.7em; color: #00ccff; text-transform: uppercase; letter-spacing: 1px; }
-        .value { font-size: 1em; font-weight: bold; margin-top: 4px; }
-        
-        input[type=range] { 
-            width: 100%; 
-            margin-top: 15px; 
-            height: 30px; /* PiÃ¹ facile da toccare col pollice */
-            cursor: pointer; 
-            accent-color: #00ccff; 
-        }
-
+        .label { font-family: 'Orbitron', sans-serif; font-size: 0.6em; color: #00ccff; text-transform: uppercase; letter-spacing: 2px; }
+        .value { font-size: 1em; font-weight: bold; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin-top: 15px; padding: 15px 0; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 3px; background: rgba(0, 204, 255, 0.3); border-radius: 2px; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #00ccff; margin-top: -9px; box-shadow: 0 0 10px rgba(0,204,255,0.5); }
         #plot { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
     <div id="info-panel">
-        <div class="label">Orario di Roma</div>
+        <div class="label">Data (Roma)</div>
         <div id="current-date" class="value">---</div>
     </div>
-
-    <div id="plot-container">
-        <div id="plot"></div>
-    </div>
-
+    <div id="plot-container"><div id="plot"></div></div>
     <div id="controls">
-        <div class="label">Timeline Missione</div>
+        <div class="label">Mission Timeline</div>
         <input type="range" id="time-slider" min="0" value="0" step="1">
     </div>
 
@@ -86,9 +56,7 @@
         function createEarth() {
             const r = 6371;
             let lon = [], lat = [];
-            for(let i=0; i<=30; i++) {
-                lon.push(-180 + i*360/30); lat.push(-90 + i*180/30);
-            }
+            for(let i=0; i<=30; i++) { lon.push(-180 + i*360/30); lat.push(-90 + i*180/30); }
             let x = [], y = [], z = [];
             for(let i=0; i<lat.length; i++) {
                 let rx = [], ry = [], rz = [];
@@ -101,57 +69,43 @@
                 x.push(rx); y.push(ry); z.push(rz);
             }
             return {
-                type: 'surface', x: x, y: y, z: z,
-                showscale: false, opacity: 0.5,
+                type: 'surface', x: x, y: y, z: z, showscale: false, opacity: 0.5,
                 colorscale: [[0, '#001a33'], [1, '#0066ff']], hoverinfo: 'skip'
             };
         }
 
+        // STILE DEGLI ASSI
         const axisStyle = {
-            showgrid: true, gridcolor: '#222', zeroline: false, color: '#666',
-            title: { font: { size: 10, color: '#00ccff' } }
+            showgrid: true, gridcolor: '#222', zeroline: true, zerolinecolor: '#444',
+            color: '#666', tickfont: { size: 9 }, title: { font: { size: 10, color: '#00ccff' } }
         };
 
         const layout = {
-            paper_bgcolor: '#050505',
-            margin: {l:0, r:0, b:0, t:0},
+            paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
             scene: {
-                xaxis: { ...axisStyle, title: 'X' },
-                yaxis: { ...axisStyle, title: 'Y' },
-                zaxis: { ...axisStyle, title: 'Z' },
+                xaxis: { ...axisStyle, title: 'X (km)' },
+                yaxis: { ...axisStyle, title: 'Y (km)' },
+                zaxis: { ...axisStyle, title: 'Z (km)' },
                 aspectmode: 'data'
             },
-            showlegend: false,
-            autosize: true
+            showlegend: false
         };
 
         function updatePlot(index) {
             const idx = parseInt(index);
             const p = missionData[idx];
             dateLabel.innerText = formatRomeTime(p.t);
-
             const past = missionData.slice(0, idx + 1);
             const future = missionData.slice(idx);
-
             const data = [
                 createEarth(),
-                {
-                    x: past.map(d => d.x), y: past.map(d => d.y), z: past.map(d => d.z),
-                    mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d'
-                },
-                {
-                    x: future.map(d => d.x), y: future.map(d => d.y), z: future.map(d => d.z),
-                    mode: 'lines', line: {color: '#ffcc00', width: 2, dash: 'dash'}, type: 'scatter3d'
-                },
-                {
-                    x: [p.x], y: [p.y], z: [p.z],
-                    mode: 'markers', marker: {size: 5, color: '#fff', symbol: 'diamond'}, type: 'scatter3d'
-                }
+                { x: past.map(d => d.x), y: past.map(d => d.y), z: past.map(d => d.z), mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d' },
+                { x: future.map(d => d.x), y: future.map(d => d.y), z: future.map(d => d.z), mode: 'lines', line: {color: '#ffcc00', width: 2, dash: 'dash'}, type: 'scatter3d' },
+                { x: [p.x], y: [p.y], z: [p.z], mode: 'markers', marker: {size: 5, color: '#fff', symbol: 'diamond'}, type: 'scatter3d' }
             ];
             Plotly.react('plot', data, layout);
         }
 
-        // Trova indice passato
         const now = new Date().getTime();
         let openIndex = 0;
         for (let i = 0; i < missionData.length; i++) {
@@ -164,11 +118,7 @@
         });
 
         slider.oninput = function() { updatePlot(this.value); };
-
-        // Fix per ridimensionamento finestra
-        window.onresize = function() {
-            Plotly.Plots.resize('plot');
-        };
+        window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
     </script>
 </body>
 </html>
