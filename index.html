@@ -9,85 +9,47 @@
     <style>
         :root { --safe-bottom: env(safe-area-inset-bottom, 20px); }
         body { margin: 0; background-color: #050505; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
-        
-        #loading-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #050505; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 9999;
-            transition: opacity 0.8s ease-out, visibility 0.8s;
-        }
-        .spinner {
-            width: 50px; height: 50px; border: 3px solid rgba(0,204,255,0.1);
-            border-top: 3px solid #00ccff; border-radius: 50%;
-            animation: spin 1s linear infinite; margin-bottom: 20px;
-        }
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.8s ease-out, visibility 0.8s; }
+        .spinner { width: 50px; height: 50px; border: 3px solid rgba(0,204,255,0.1); border-top: 3px solid #00ccff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .loading-text { font-family: 'Orbitron', sans-serif; font-size: 0.8em; color: #00ccff; letter-spacing: 4px; }
-
-        #info-panel { 
-            flex: 0 0 auto; 
-            padding: 15px 10px; 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 10px;
-            background: #080808; 
-            border-bottom: 1px solid #222;
-        }
+        #info-panel { flex: 0 0 auto; padding: 15px 5px; display: grid; grid-template-columns: 1.2fr 0.9fr 0.9fr; gap: 5px; background: #080808; border-bottom: 1px solid #222; }
         #plot-container { flex: 0 0 55vh; width: 100%; position: relative; }
         #controls { flex: 1 1 auto; padding: 10px 30px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
-
         .data-block { text-align: center; }
-        .label { font-family: 'Orbitron', sans-serif; font-size: 0.55em; color: #00ccff; text-transform: uppercase; letter-spacing: 2px; }
-        .value { font-size: 1.0em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
-        
+        .label { font-family: 'Orbitron', sans-serif; font-size: 0.5em; color: #00ccff; text-transform: uppercase; letter-spacing: 1.5px; }
+        .value { font-size: 0.9em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; padding: 15px 0; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
-        
         #plot { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
-    <div id="loading-screen">
-        <div class="spinner"></div>
-        <div class="loading-text">LOADING EPHEMERIDES</div>
-    </div>
-
+    <div id="loading-screen"><div class="spinner"></div><div class="loading-text">LOADING EPHEMERIDES</div></div>
     <div id="info-panel">
-        <div class="data-block">
-            <div class="label">Mission Time (GMT+2)</div>
-            <div id="current-date" class="value">---</div>
-        </div>
-        <div class="data-block">
-            <div class="label">Earth Center Distance</div>
-            <div id="current-dist" class="value">---</div>
-        </div>
+        <div class="data-block"><div class="label">Mission Time (GMT+2)</div><div id="current-date" class="value">---</div></div>
+        <div class="data-block"><div class="label">Earth distance</div><div id="current-dist-earth" class="value">---</div></div>
+        <div class="data-block"><div class="label">Moon distance</div><div id="current-dist-moon" class="value">---</div></div>
     </div>
-
-    <div id="plot-container">
-        <div id="plot"></div>
-    </div>
-
+    <div id="plot-container"><div id="plot"></div></div>
     <div id="controls">
-        <div class="label">Mission Timeline (incl. Moon)</div>
+        <div class="label">Mission Timeline</div>
         <input type="range" id="time-slider" min="0" value="0" step="1">
     </div>
 
     <script>
-        let missionData = [];
-        let moonData = [];
-        let fullX, fullY, fullZ;
+        let missionData = [], moonData = [], fullX, fullY, fullZ;
         const slider = document.getElementById('time-slider');
         const dateLabel = document.getElementById('current-date');
-        const distLabel = document.getElementById('current-dist');
+        const distEarthLabel = document.getElementById('current-dist-earth');
+        const distMoonLabel = document.getElementById('current-dist-moon');
         const loadingScreen = document.getElementById('loading-screen');
-
         const MOON_RADIUS = 1737.4;
 
         function formatGMT2(utcString) {
             return new Date(utcString).toLocaleString('en-GB', {
-                timeZone: 'Europe/Paris',
-                day: '2-digit', month: 'short',
+                timeZone: 'Europe/Paris', day: '2-digit', month: 'short',
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
         }
@@ -110,14 +72,16 @@
             return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
         }
 
+        // Layout con UIREVISION abilitata
         const layout = {
             paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
+            uirevision: 'constant', // Fondamentale per mantenere zoom e rotazione
             scene: {
                 xaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 yaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 zaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
                 aspectmode: 'data',
-                camera: { eye: { x: -0.1, y: -0.2, z: 0.1 } } // Orientamento richiesto
+                camera: { eye: { x: -0.1, y: -0.2, z: 0.1 } }
             },
             showlegend: false
         };
@@ -126,14 +90,16 @@
             const idx = parseInt(index);
             const p = missionData[idx];
             const targetTime = new Date(p.t).getTime();
-
             const moonPos = moonData.reduce((prev, curr) => {
                 return Math.abs(new Date(curr.t).getTime() - targetTime) < Math.abs(new Date(prev.t).getTime() - targetTime) ? curr : prev;
             });
 
-            const dist = Math.sqrt(p.x**2 + p.y**2 + p.z**2);
+            const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2);
+            const distMoon = Math.sqrt((p.x - moonPos.x)**2 + (p.y - moonPos.y)**2 + (p.z - moonPos.z)**2);
+
             dateLabel.innerText = formatGMT2(p.t);
-            distLabel.innerText = dist.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
+            distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
+            distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
             const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
             moonSphere.x = moonSphere.x.map(row => row.map(v => v + moonPos.x));
@@ -141,20 +107,11 @@
             moonSphere.z = moonSphere.z.map(row => row.map(v => v + moonPos.z));
 
             Plotly.react('plot', [
-                createSphere(6371, '#0066ff', 1), // Terra
-                moonSphere,                      // Luna
-                { // Traiettoria Passata (Azzurra)
-                    x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1),
-                    mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d'
-                },
-                { // Traiettoria Futura (Gialla)
-                    x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx),
-                    mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d'
-                },
-                { // Marker Navicella
-                    x: [p.x], y: [p.y], z: [p.z],
-                    mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d'
-                }
+                createSphere(6371, '#0066ff', 1),
+                moonSphere,
+                { x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1), mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d' },
+                { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
+                { x: [p.x], y: [p.y], z: [p.z], mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d' }
             ], layout);
         }
 
@@ -162,13 +119,9 @@
             try {
                 const response = await fetch('missionData.json');
                 const data = await response.json();
-                missionData = data.mission;
-                moonData = data.moon;
-                
+                missionData = data.mission; moonData = data.moon;
                 slider.max = missionData.length - 1;
-                fullX = missionData.map(d => d.x);
-                fullY = missionData.map(d => d.y);
-                fullZ = missionData.map(d => d.z);
+                fullX = missionData.map(d => d.x); fullY = missionData.map(d => d.y); fullZ = missionData.map(d => d.z);
 
                 const now = new Date().getTime();
                 let openIndex = missionData.findIndex(d => new Date(d.t).getTime() >= now);
@@ -182,25 +135,11 @@
                     loadingScreen.style.opacity = '0';
                     setTimeout(() => loadingScreen.style.visibility = 'hidden', 800);
                 }, 500);
-
-            } catch (err) {
-                console.error(err);
-                document.querySelector('.loading-text').innerText = "IMPORT ERROR";
-            }
+            } catch (err) { console.error(err); }
         }
 
         init();
-
-        let frameRequested = false;
-        slider.oninput = function() {
-            if (!frameRequested) {
-                frameRequested = true;
-                requestAnimationFrame(() => {
-                    updatePlot(slider.value);
-                    frameRequested = false;
-                });
-            }
-        };
+        slider.oninput = () => updatePlot(slider.value);
         window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
     </script>
 </body>
