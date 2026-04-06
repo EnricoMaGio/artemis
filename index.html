@@ -23,8 +23,21 @@
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
         #plot { width: 100%; height: 100%; }
+        
         .btn-group { display: flex; gap: 5px; margin-top: 10px; }
-        .nav-btn { flex: 1; background: rgba(0, 204, 255, 0.1); border: 1px solid #00ccff; color: #00ccff; font-family: 'Orbitron', sans-serif; font-size: 0.55em; padding: 10px 2px; cursor: pointer; transition: 0.3s; text-transform: uppercase; letter-spacing: 1px; }
+        .nav-btn { 
+            flex: 1;
+            background: rgba(0, 204, 255, 0.1); 
+            border: 1px solid #00ccff; 
+            color: #00ccff; 
+            font-family: 'Orbitron', sans-serif; 
+            font-size: 0.55em; 
+            padding: 10px 2px; 
+            cursor: pointer; 
+            transition: 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
         .nav-btn:hover { background: rgba(0, 204, 255, 0.3); }
     </style>
 </head>
@@ -66,7 +79,7 @@
             });
         }
 
-        function createSphere(r, color, opacity, res = 30) {
+        function createSphere(r, color, opacity, res = 24) {
             let x = [], y = [], z = [];
             for(let i=0; i<=res; i++) {
                 let lat = -90 + i*180/res;
@@ -81,13 +94,7 @@
                 }
                 x.push(rowX); y.push(rowY); z.push(rowZ);
             }
-            return { 
-                type: 'surface', x: x, y: y, z: z, 
-                showscale: false, opacity: opacity, 
-                colorscale: [[0, color], [1, color]], 
-                hoverinfo: 'skip',
-                lighting: { ambient: 0.6, diffuse: 0.8, specular: 0.05, roughness: 0.9 }
-            };
+            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
         }
 
         const layout = {
@@ -98,8 +105,7 @@
                 yaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Y [km]' },
                 zaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Z [km]' },
                 aspectmode: 'data',
-                camera: { eye: { x: -2.05, y: -0.46, z: 0.51 } },
-                annotations: []
+                camera: { eye: { x: -2.05, y: -0.46, z: 0.51 } }
             },
             showlegend: false
         };
@@ -116,9 +122,9 @@
             distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
             distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            // Higher resolution and tidal lock rotation
+            // TIDAL LOCK: Rotate Moon grid so the same side faces Earth (0,0,0)
             const angleToEarth = Math.atan2(p.my, p.mx);
-            let res = 60; // Increased polygons
+            let res = 30;
             let mx = [], my = [], mz = [];
             for(let i=0; i<=res; i++) {
                 let lat = -90 + i*180/res;
@@ -137,23 +143,15 @@
             const moonTrace = {
                 type: 'surface', x: mx, y: my, z: mz,
                 showscale: false, hoverinfo: 'skip',
-                colorscale: [[0, '#ccc'], [1, '#ccc']],
-                texture: { source: "moon.jpg" },
-                lighting: {
-                    ambient: 0.4,
-                    diffuse: 1.0,
-                    fresnel: 0.1,
-                    specular: 0.1,
-                    roughness: 0.8
-                },
-                lightposition: { x: 1000000, y: 0, z: 0 } // Fixed "Sun" direction
+                colorscale: [[0, '#888'], [1, '#888']], 
+                texture: { source: "moon.jpg" }
             };
 
             const currentLayout = JSON.parse(JSON.stringify(layout));
             if (customCamera) currentLayout.scene.camera = customCamera;
 
             Plotly.react('plot', [
-                createSphere(6371, '#0066ff', 1, 40), // Earth
+                createSphere(6371, '#0066ff', 1),
                 moonTrace,
                 { x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1), mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d' },
                 { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
@@ -161,19 +159,11 @@
             ], currentLayout);
         }
 
-        function goToCurrentTime() {
-            const now = new Date().getTime();
-            let index = missionData.findIndex(d => new Date(d.t).getTime() >= now);
-            if (index === -1) index = missionData.length - 1;
-            if (index < 0) index = 0;
-            slider.value = index;
-            updatePlot(index);
-        }
-
         async function init() {
             try {
                 const response = await fetch('missionData.json');
                 missionData = await response.json();
+                
                 slider.max = missionData.length - 1;
                 fullX = missionData.map(d => d.x); 
                 fullY = missionData.map(d => d.y); 
@@ -192,7 +182,16 @@
                     loadingScreen.style.opacity = '0';
                     setTimeout(() => loadingScreen.style.visibility = 'hidden', 800);
                 }, 500);
-            } catch (err) { console.error("Initialization failed:", err); }
+            } catch (err) { console.error("Initialization error:", err); }
+        }
+
+        function goToCurrentTime() {
+            const now = new Date().getTime();
+            let index = missionData.findIndex(d => new Date(d.t).getTime() >= now);
+            if (index === -1) index = missionData.length - 1;
+            if (index < 0) index = 0;
+            slider.value = index;
+            updatePlot(index);
         }
 
         init();
