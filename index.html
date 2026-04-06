@@ -17,22 +17,22 @@
         #plot-container { flex: 0 0 55vh; width: 100%; position: relative; }
         #controls { flex: 1 1 auto; padding: 10px 15px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
         .data-block { text-align: center; }
-        .label { font-family: 'Orbitron', sans-serif; font-size: 0.5em; color: #00ccff; text-transform: uppercase; letter-spacing: 1.5px; }
+        .label { font-family: 'Orbitron', sans-serif; font-size: 0.5em; color: #00ccff; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px; }
         .value { font-size: 0.9em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
         input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; padding: 15px 0; }
         input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
         #plot { width: 100%; height: 100%; }
         
-        .btn-group { display: flex; gap: 4px; margin-top: 10px; }
+        .btn-group { display: flex; gap: 4px; margin-top: 10px; margin-bottom: 10px; }
         .nav-btn { 
             flex: 1;
             background: rgba(0, 204, 255, 0.1); 
             border: 1px solid #00ccff; 
             color: #00ccff; 
             font-family: 'Orbitron', sans-serif; 
-            font-size: 0.45rem; /* Smaller font for mobile */
-            padding: 8px 1px;   /* Tighter padding */
+            font-size: 0.45rem; 
+            padding: 8px 1px;   
             cursor: pointer; 
             transition: 0.3s;
             text-transform: uppercase;
@@ -40,6 +40,17 @@
             white-space: nowrap;
         }
         .nav-btn:hover { background: rgba(0, 204, 255, 0.3); }
+
+        select {
+            background: #111;
+            color: #00ccff;
+            border: 1px solid #333;
+            padding: 8px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7em;
+            width: 100%;
+            outline: none;
+        }
     </style>
 </head>
 <body>
@@ -58,6 +69,18 @@
             <button id="farside-btn" class="nav-btn">Moon Far Side</button>
             <button id="now-btn" class="nav-btn">Current Time</button>
         </div>
+        <div class="label">Jump to Maneuver</div>
+        <select id="maneuver-select">
+            <option value="" disabled selected>Select an event...</option>
+            <option value="2026-04-02T03:25:00Z">Upper Stage Separation Burn</option>
+            <option value="2026-04-02T11:30:00Z">Perigee Raise Burn (Orion)</option>
+            <option value="2026-04-02T23:49:00Z">Translunar Injection (TLI)</option>
+            <option value="2026-04-06T03:03:17Z">Trajectory Correction #3 (OTC-3)</option>
+            <option value="2026-04-08T00:04:00Z">Return Correction #1</option>
+            <option value="2026-04-10T03:04:00Z">Return Correction #2</option>
+            <option value="2026-04-10T19:04:00Z">Return Correction #3</option>
+            <option value="2026-04-10T23:47:00Z">Crew Module Raise Burn</option>
+        </select>
     </div>
 
     <script>
@@ -67,6 +90,7 @@
         const moonBtn = document.getElementById('moon-btn');
         const nowBtn = document.getElementById('now-btn');
         const farsideBtn = document.getElementById('farside-btn');
+        const maneuverSelect = document.getElementById('maneuver-select');
         const dateLabel = document.getElementById('current-date');
         const distEarthLabel = document.getElementById('current-dist-earth');
         const distMoonLabel = document.getElementById('current-dist-moon');
@@ -114,6 +138,7 @@
         function updatePlot(index, customCamera = null) {
             const idx = parseInt(index);
             const p = missionData[idx];
+            if (!p) return;
             
             const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) - 6371;
             const distMoon = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2) - MOON_RADIUS;
@@ -137,6 +162,14 @@
                 { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
                 { x: [p.x], y: [p.y], z: [p.z], mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d' }
             ], currentLayout);
+        }
+
+        function jumpToDate(isoString) {
+            const target = new Date(isoString).getTime();
+            let index = missionData.findIndex(d => new Date(d.t).getTime() >= target);
+            if (index === -1) index = missionData.length - 1;
+            slider.value = index;
+            updatePlot(index);
         }
 
         function goToCurrentTime() {
@@ -184,17 +217,15 @@
             updatePlot(moonClosestIndex);
         };
         nowBtn.onclick = goToCurrentTime;
+        maneuverSelect.onchange = (e) => jumpToDate(e.target.value);
 
         farsideBtn.onclick = () => {
             slider.value = moonClosestIndex;
-            const p = missionData[moonClosestIndex];
-            
             const farsideCamera = {
                 eye: { x: -0.8723140987660083 *0.9, y: 0.36 *0.9, z: -0.4813424309516603*0.9 },
                 center: { x: 0, y: 0, z: 0 },
                 up: { x: 0, y: 0, z: 1 }
             };
-            
             updatePlot(moonClosestIndex, farsideCamera);
         };
 
