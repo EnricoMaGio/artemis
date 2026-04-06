@@ -110,9 +110,9 @@
             showlegend: false
         };
 
-        function updatePlot(index, customCamera = null) {
+       function updatePlot(index, customCamera = null) {
             const idx = parseInt(index);
-            if (!missionData[idx]) return;
+            if (!missionData[idx]) return; // Guard against empty data
             const p = missionData[idx];
             
             const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) - 6371;
@@ -122,9 +122,9 @@
             distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
             distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            // TIDAL LOCK: Rotate Moon grid so the same side faces Earth (0,0,0)
+            // TIDAL LOCK CALCULATION: Rotate the sphere grid to face Earth
             const angleToEarth = Math.atan2(p.my, p.mx);
-            let res = 30;
+            let res = 30; 
             let mx = [], my = [], mz = [];
             for(let i=0; i<=res; i++) {
                 let lat = -90 + i*180/res;
@@ -132,6 +132,7 @@
                 let r_cos_lat = MOON_RADIUS * Math.cos(lat * Math.PI / 180);
                 let rowX = [], rowY = [], rowZ = [];
                 for(let j=0; j<=res; j++) {
+                    // Offset longitude by the angle to Earth to keep it tidal locked
                     let lon = (-180 + j*360/res) * Math.PI / 180 + angleToEarth;
                     rowX.push(r_cos_lat * Math.cos(lon) + p.mx);
                     rowY.push(r_cos_lat * Math.sin(lon) + p.my);
@@ -141,17 +142,24 @@
             }
 
             const moonTrace = {
-                type: 'surface', x: mx, y: my, z: mz,
-                showscale: false, hoverinfo: 'skip',
-                colorscale: [[0, '#888'], [1, '#888']], 
-                texture: { source: "moon.jpg" }
+                type: 'surface',
+                x: mx, y: my, z: mz,
+                showscale: false,
+                hoverinfo: 'skip',
+                colorscale: [[0, '#888'], [1, '#888']], // Fallback color
+                texture: {
+                    source: "moon.jpg", // Ensure moon.jpg is in the same folder
+                    u: [0, 1],
+                    v: [0, 1]
+                },
+                lighting: { ambient: 0.7, diffuse: 0.8 }
             };
 
             const currentLayout = JSON.parse(JSON.stringify(layout));
             if (customCamera) currentLayout.scene.camera = customCamera;
 
             Plotly.react('plot', [
-                createSphere(6371, '#0066ff', 1),
+                createSphere(6371, '#0066ff', 1), // Earth
                 moonTrace,
                 { x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1), mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d' },
                 { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
