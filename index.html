@@ -66,8 +66,7 @@
             });
         }
 
-        // Generic sphere for Earth
-        function createSphere(r, color, opacity, res = 18) {
+        function createSphere(r, color, opacity, res = 30) {
             let x = [], y = [], z = [];
             for(let i=0; i<=res; i++) {
                 let lat = -90 + i*180/res;
@@ -82,7 +81,13 @@
                 }
                 x.push(rowX); y.push(rowY); z.push(rowZ);
             }
-            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
+            return { 
+                type: 'surface', x: x, y: y, z: z, 
+                showscale: false, opacity: opacity, 
+                colorscale: [[0, color], [1, color]], 
+                hoverinfo: 'skip',
+                lighting: { ambient: 0.6, diffuse: 0.8, specular: 0.05, roughness: 0.9 }
+            };
         }
 
         const layout = {
@@ -93,7 +98,8 @@
                 yaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Y [km]' },
                 zaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Z [km]' },
                 aspectmode: 'data',
-                camera: { eye: { x: -2.05, y: -0.46, z: 0.51 } }
+                camera: { eye: { x: -2.05, y: -0.46, z: 0.51 } },
+                annotations: []
             },
             showlegend: false
         };
@@ -110,11 +116,9 @@
             distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
             distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            // TIDAL LOCK CALCULATION
-            // Calculate angle from Earth (0,0,0) to Moon center to rotate texture correctly
+            // Higher resolution and tidal lock rotation
             const angleToEarth = Math.atan2(p.my, p.mx);
-
-            let res = 24;
+            let res = 60; // Increased polygons
             let mx = [], my = [], mz = [];
             for(let i=0; i<=res; i++) {
                 let lat = -90 + i*180/res;
@@ -133,15 +137,23 @@
             const moonTrace = {
                 type: 'surface', x: mx, y: my, z: mz,
                 showscale: false, hoverinfo: 'skip',
-                colorscale: [[0, '#888'], [1, '#888']], // Grey fallback
-                texture: { source: "moon.jpg" }
+                colorscale: [[0, '#ccc'], [1, '#ccc']],
+                texture: { source: "moon.jpg" },
+                lighting: {
+                    ambient: 0.4,
+                    diffuse: 1.0,
+                    fresnel: 0.1,
+                    specular: 0.1,
+                    roughness: 0.8
+                },
+                lightposition: { x: 1000000, y: 0, z: 0 } // Fixed "Sun" direction
             };
 
             const currentLayout = JSON.parse(JSON.stringify(layout));
             if (customCamera) currentLayout.scene.camera = customCamera;
 
             Plotly.react('plot', [
-                createSphere(6371, '#0066ff', 1),
+                createSphere(6371, '#0066ff', 1, 40), // Earth
                 moonTrace,
                 { x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1), mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d' },
                 { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
@@ -162,7 +174,6 @@
             try {
                 const response = await fetch('missionData.json');
                 missionData = await response.json();
-                
                 slider.max = missionData.length - 1;
                 fullX = missionData.map(d => d.x); 
                 fullY = missionData.map(d => d.y); 
@@ -171,10 +182,7 @@
                 let minDist = Infinity;
                 missionData.forEach((p, index) => {
                     const d = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2);
-                    if (d < minDist) {
-                        minDist = d;
-                        moonClosestIndex = index;
-                    }
+                    if (d < minDist) { minDist = d; moonClosestIndex = index; }
                 });
 
                 await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: false});
@@ -189,10 +197,7 @@
 
         init();
         slider.oninput = () => updatePlot(slider.value);
-        moonBtn.onclick = () => {
-            slider.value = moonClosestIndex;
-            updatePlot(moonClosestIndex);
-        };
+        moonBtn.onclick = () => { slider.value = moonClosestIndex; updatePlot(moonClosestIndex); };
         nowBtn.onclick = goToCurrentTime;
         farsideBtn.onclick = () => {
             slider.value = moonClosestIndex;
@@ -203,7 +208,6 @@
             };
             updatePlot(moonClosestIndex, farsideCamera);
         };
-
         window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
     </script>
 </body>
