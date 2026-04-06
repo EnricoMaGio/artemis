@@ -1,186 +1,214 @@
-﻿<script>
-    let missionData = [], fullX, fullY, fullZ;
-    let moonClosestIndex = 0;
-    const slider = document.getElementById('time-slider');
-    const moonBtn = document.getElementById('moon-btn');
-    const nowBtn = document.getElementById('now-btn');
-    const farsideBtn = document.getElementById('farside-btn');
-    const dateLabel = document.getElementById('current-date');
-    const distEarthLabel = document.getElementById('current-dist-earth');
-    const distMoonLabel = document.getElementById('current-dist-moon');
-    const loadingScreen = document.getElementById('loading-screen');
-    const MOON_RADIUS = 1737.4;
-
-    let moonTextureData = null;
-
-    // Helper: Converts moon.jpg into a 2D array of intensity values for Plotly
-    function getMoonTexture(url) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            img.src = url;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = 512; // Resolution for texture mapping
-                canvas.height = 256;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-                let intensity = [];
-                for (let i = 0; i < canvas.height; i++) {
-                    let row = [];
-                    for (let j = 0; j < canvas.width; j++) {
-                        const idx = (i * canvas.width + j) * 4;
-                        // Calculate brightness (average of RGB)
-                        row.push((data[idx] + data[idx + 1] + data[idx + 2]) / 3);
-                    }
-                    intensity.push(row);
-                }
-                resolve(intensity);
-            };
-            img.onerror = () => resolve(null);
-        });
-    }
-
-    function formatGMT2(utcString) {
-        return new Date(utcString).toLocaleString('en-GB', {
-            timeZone: 'Europe/Paris', day: '2-digit', month: 'short',
-            hour: '2-digit', minute: '2-digit', second: '2-digit'
-        });
-    }
-
-    function createSphere(r, color, opacity, res = 30) {
-        let x = [], y = [], z = [];
-        for(let i=0; i<=res; i++) {
-            let lat = -90 + i*180/res;
-            let r_z = r * Math.sin(lat * Math.PI / 180);
-            let r_cos_lat = r * Math.cos(lat * Math.PI / 180);
-            let rowX = [], rowY = [], rowZ = [];
-            for(let j=0; j<=res; j++) {
-                let lon = -180 + j*360/res;
-                rowX.push(r_cos_lat * Math.cos(lon * Math.PI / 180));
-                rowY.push(r_cos_lat * Math.sin(lon * Math.PI / 180));
-                rowZ.push(r_z);
-            }
-            x.push(rowX); y.push(rowY); z.push(rowZ);
-        }
-        return { type: 'surface', x, y, z, showscale: false, opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
-    }
-
-    const layout = {
-        paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
-        uirevision: 'constant',
-        scene: {
-            xaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
-            yaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
-            zaxis: { showgrid: true, gridcolor: '#111', color: '#444' },
-            aspectmode: 'data',
-            camera: { eye: { x: -2.05, y: -0.46, z: 0.51 } }
-        },
-        showlegend: false
-    };
-
-    function updatePlot(index, customCamera = null) {
-        const idx = parseInt(index);
-        if (!missionData[idx]) return;
-        const p = missionData[idx];
+﻿﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Artemis II Tracker</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --safe-bottom: env(safe-area-inset-bottom, 20px); }
+        body { margin: 0; background-color: #050505; color: white; font-family: sans-serif; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #050505; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.8s ease-out, visibility 0.8s; }
+        .spinner { width: 50px; height: 50px; border: 3px solid rgba(0,204,255,0.1); border-top: 3px solid #00ccff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-text { font-family: 'Orbitron', sans-serif; font-size: 0.8em; color: #00ccff; letter-spacing: 4px; }
+        #info-panel { flex: 0 0 auto; padding: 15px 5px; display: grid; grid-template-columns: 1.2fr 0.9fr 0.9fr; gap: 5px; background: #080808; border-bottom: 1px solid #222; }
+        #plot-container { flex: 0 0 55vh; width: 100%; position: relative; }
+        #controls { flex: 1 1 auto; padding: 10px 30px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
+        .data-block { text-align: center; }
+        .label { font-family: 'Orbitron', sans-serif; font-size: 0.5em; color: #00ccff; text-transform: uppercase; letter-spacing: 1.5px; }
+        .value { font-size: 0.9em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; padding: 15px 0; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 2px; background: #333; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
+        #plot { width: 100%; height: 100%; }
         
-        const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) - 6371;
-        const distMoon = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2) - MOON_RADIUS;
+        .btn-group { display: flex; gap: 5px; margin-top: 10px; }
+        .nav-btn { 
+            flex: 1;
+            background: rgba(0, 204, 255, 0.1); 
+            border: 1px solid #00ccff; 
+            color: #00ccff; 
+            font-family: 'Orbitron', sans-serif; 
+            font-size: 0.55em; 
+            padding: 10px 2px; 
+            cursor: pointer; 
+            transition: 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .nav-btn:hover { background: rgba(0, 204, 255, 0.3); }
+    </style>
+</head>
+<body>
+    <div id="loading-screen"><div class="spinner"></div><div class="loading-text">LOADING EPHEMERIDES</div></div>
+    <div id="info-panel">
+        <div class="data-block"><div class="label">Mission Time (GMT+2)</div><div id="current-date" class="value">---</div></div>
+        <div class="data-block"><div class="label">Earth surface distance</div><div id="current-dist-earth" class="value">---</div></div>
+        <div class="data-block"><div class="label">Moon surface distance</div><div id="current-dist-moon" class="value">---</div></div>
+    </div>
+    <div id="plot-container"><div id="plot"></div></div>
+    <div id="controls">
+        <div class="label">Mission Timeline</div>
+        <input type="range" id="time-slider" min="0" value="0" step="1">
+        <div class="btn-group">
+            <button id="moon-btn" class="nav-btn">Closest Moon</button>
+            <button id="farside-btn" class="nav-btn">Moon Far Side</button>
+            <button id="now-btn" class="nav-btn">Current Time</button>
+        </div>
+    </div>
 
-        dateLabel.innerText = formatGMT2(p.t);
-        distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
-        distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
+    <script>
+        let missionData = [], fullX, fullY, fullZ;
+        let moonClosestIndex = 0;
+        const slider = document.getElementById('time-slider');
+        const moonBtn = document.getElementById('moon-btn');
+        const nowBtn = document.getElementById('now-btn');
+        const farsideBtn = document.getElementById('farside-btn');
+        const dateLabel = document.getElementById('current-date');
+        const distEarthLabel = document.getElementById('current-dist-earth');
+        const distMoonLabel = document.getElementById('current-dist-moon');
+        const loadingScreen = document.getElementById('loading-screen');
+        const MOON_RADIUS = 1737.4;
 
-        // TIDAL LOCK: Near side faces Earth (0,0,0)
-        const angleToEarth = Math.atan2(p.my, p.mx);
-        const res = 50; // High poly count for smooth texture
-        let mx = [], my = [], mz = [], surfacecolor = [];
-
-        for(let i=0; i<=res; i++) {
-            let lat = -90 + i*180/res;
-            let r_z = MOON_RADIUS * Math.sin(lat * Math.PI / 180);
-            let r_cos_lat = MOON_RADIUS * Math.cos(lat * Math.PI / 180);
-            let rowX = [], rowY = [], rowZ = [], rowColor = [];
-
-            for(let j=0; j<=res; j++) {
-                let lon_rad = (-180 + j*360/res) * Math.PI / 180 + angleToEarth;
-                rowX.push(r_cos_lat * Math.cos(lon_rad) + p.mx);
-                rowY.push(r_cos_lat * Math.sin(lon_rad) + p.my);
-                rowZ.push(r_z + p.mz);
-
-                // Sample texture data
-                if (moonTextureData) {
-                    let ty = Math.floor((i/res) * (moonTextureData.length - 1));
-                    let tx = Math.floor((j/res) * (moonTextureData[0].length - 1));
-                    rowColor.push(moonTextureData[ty][tx]);
-                } else {
-                    rowColor.push(128); // Mid-grey if not loaded
-                }
-            }
-            mx.push(rowX); my.push(rowY); mz.push(rowZ); surfacecolor.push(rowColor);
+        function formatGMT2(utcString) {
+            return new Date(utcString).toLocaleString('en-GB', {
+                timeZone: 'Europe/Paris', day: '2-digit', month: 'short',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
         }
 
-        const moonTrace = {
-            type: 'surface', x: mx, y: my, z: mz,
-            surfacecolor: surfacecolor,
-            colorscale: 'Greys', reversescale: false,
-            showscale: false, hoverinfo: 'skip',
-            lighting: { ambient: 0.6, diffuse: 0.9, roughness: 0.9 }
+        function createSphere(r, color, opacity, res = 18) {
+            let x = [], y = [], z = [];
+            for(let i=0; i<=res; i++) {
+                let lat = -90 + i*180/res;
+                let r_z = r * Math.sin(lat * Math.PI / 180);
+                let r_cos_lat = r * Math.cos(lat * Math.PI / 180);
+                let rowX = [], rowY = [], rowZ = [];
+                for(let j=0; j<=res; j++) {
+                    let lon = -180 + j*360/res;
+                    rowX.push(r_cos_lat * Math.cos(lon * Math.PI / 180));
+                    rowY.push(r_cos_lat * Math.sin(lon * Math.PI / 180));
+                    rowZ.push(r_z);
+                }
+                x.push(rowX); y.push(rowY); z.push(rowZ);
+            }
+            return { type: 'surface', x: x, y: y, z: z, showscale: false, opacity: opacity, colorscale: [[0, color], [1, color]], hoverinfo: 'skip' };
+        }
+
+        const layout = {
+            paper_bgcolor: '#050505', margin: {l:0, r:0, b:0, t:0},
+            uirevision: 'constant',
+            scene: {
+                xaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'X [km]' },
+                yaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Y [km]' },
+                zaxis: { showgrid: true, gridcolor: '#111', color: '#444', title: 'Z [km]' },
+                aspectmode: 'data',
+                camera: { eye: { x: -2.05, y: -0.46, z: 0.51 } }
+            },
+            showlegend: false
         };
 
-        const currentLayout = JSON.parse(JSON.stringify(layout));
-        if (customCamera) currentLayout.scene.camera = customCamera;
-
-        Plotly.react('plot', [
-            createSphere(6371, '#0066ff', 1, 40), // Earth
-            moonTrace,
-            { x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1), mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d' },
-            { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
-            { x: [p.x], y: [p.y], z: [p.z], mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d' }
-        ], currentLayout);
-    }
-
-    async function init() {
-        try {
-            // Load texture before mission data to prevent grey patterns
-            moonTextureData = await getMoonTexture('moon.jpg');
+        function updatePlot(index, customCamera = null) {
+            const idx = parseInt(index);
+            const p = missionData[idx];
             
-            const response = await fetch('missionData.json');
-            missionData = await response.json();
-            slider.max = missionData.length - 1;
-            fullX = missionData.map(d => d.x); 
-            fullY = missionData.map(d => d.y); 
-            fullZ = missionData.map(d => d.z);
+            const distEarth = Math.sqrt(p.x**2 + p.y**2 + p.z**2) - 6371;
+            const distMoon = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2) - MOON_RADIUS;
 
-            let minDist = Infinity;
-            missionData.forEach((p, index) => {
-                const d = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2);
-                if (d < minDist) { minDist = d; moonClosestIndex = index; }
-            });
+            dateLabel.innerText = formatGMT2(p.t);
+            distEarthLabel.innerText = distEarth.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
+            distMoonLabel.innerText = distMoon.toLocaleString(undefined, {maximumFractionDigits: 0}) + " km";
 
-            await Plotly.newPlot('plot', [], layout, {responsive: true});
-            goToCurrentTime();
-            loadingScreen.style.opacity = '0';
-            setTimeout(() => loadingScreen.style.visibility = 'hidden', 800);
-        } catch (err) { console.error(err); }
-    }
+            const moonSphere = createSphere(MOON_RADIUS, '#d1d1d1', 1, 15);
+            moonSphere.x = moonSphere.x.map(row => row.map(v => v + p.mx));
+            moonSphere.y = moonSphere.y.map(row => row.map(v => v + p.my));
+            moonSphere.z = moonSphere.z.map(row => row.map(v => v + p.mz));
 
-    function goToCurrentTime() {
-        const now = new Date().getTime();
-        let index = missionData.findIndex(d => new Date(d.t).getTime() >= now);
-        if (index === -1) index = missionData.length - 1;
-        slider.value = index;
-        updatePlot(index);
-    }
+            const currentLayout = JSON.parse(JSON.stringify(layout));
+            if (customCamera) currentLayout.scene.camera = customCamera;
 
-    init();
-    slider.oninput = () => updatePlot(slider.value);
-    moonBtn.onclick = () => { slider.value = moonClosestIndex; updatePlot(moonClosestIndex); };
-    nowBtn.onclick = goToCurrentTime;
-    farsideBtn.onclick = () => {
-        const farsideCamera = { eye: { x: -0.8, y: 0.3, z: -0.4 } };
-        updatePlot(slider.value, farsideCamera);
-    };
-    window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
-</script>
+            Plotly.react('plot', [
+                createSphere(6371, '#0066ff', 1),
+                moonSphere,
+                { x: fullX.slice(0, idx + 1), y: fullY.slice(0, idx + 1), z: fullZ.slice(0, idx + 1), mode: 'lines', line: {color: '#00ccff', width: 4}, type: 'scatter3d' },
+                { x: fullX.slice(idx), y: fullY.slice(idx), z: fullZ.slice(idx), mode: 'lines', line: {color: '#ffcc00', width: 1, dash: 'dash'}, type: 'scatter3d' },
+                { x: [p.x], y: [p.y], z: [p.z], mode: 'markers', marker: {size: 4, color: '#fff'}, type: 'scatter3d' }
+            ], currentLayout);
+        }
+
+        function goToCurrentTime() {
+            const now = new Date().getTime();
+            let index = missionData.findIndex(d => new Date(d.t).getTime() >= now);
+            if (index === -1) index = missionData.length - 1;
+            if (index < 0) index = 0;
+            slider.value = index;
+            updatePlot(index);
+        }
+
+        async function init() {
+            try {
+                const response = await fetch('missionData.json');
+                missionData = await response.json();
+                
+                slider.max = missionData.length - 1;
+                fullX = missionData.map(d => d.x); 
+                fullY = missionData.map(d => d.y); 
+                fullZ = missionData.map(d => d.z);
+
+                let minDist = Infinity;
+                missionData.forEach((p, index) => {
+                    const d = Math.sqrt((p.x - p.mx)**2 + (p.y - p.my)**2 + (p.z - p.mz)**2);
+                    if (d < minDist) {
+                        minDist = d;
+                        moonClosestIndex = index;
+                    }
+                });
+
+                await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: true});
+                goToCurrentTime();
+                
+                setTimeout(() => {
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => loadingScreen.style.visibility = 'hidden', 800);
+                }, 500);
+            } catch (err) { console.error(err); }
+        }
+
+        init();
+        slider.oninput = () => updatePlot(slider.value);
+        moonBtn.onclick = () => {
+            slider.value = moonClosestIndex;
+            updatePlot(moonClosestIndex);
+        };
+        nowBtn.onclick = goToCurrentTime;
+
+        farsideBtn.onclick = () => {
+            slider.value = moonClosestIndex;
+            const p = missionData[moonClosestIndex];
+            
+            // Vector from Earth(0,0,0) to Moon
+            const mag = Math.sqrt(p.mx**2 + p.my**2 + p.mz**2);
+            const ux = p.mx / mag;
+            const uy = p.my / mag;
+            const uz = p.mz / mag;
+
+            // Positioning the camera very specifically:
+            // Center on Earth (0,0,0) to keep it in frame.
+            // Move eye along the line extending from Earth through the Moon.
+            // Zoom in significantly (small multiplier like 1.1) to create the stack effect.
+            const farsideCamera = {
+                eye: { x: -0.8723140987660083 *0.9, y:  
+0.36 *0.9, z: -0.4813424309516603*0.9 },
+                center: { x: 0, y: 0, z: 0 },
+                up: { x: 0, y: 0, z: 1 }
+            };
+            
+            updatePlot(moonClosestIndex, farsideCamera);
+        };
+
+        window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
+    </script>
+</body>
+</html>
