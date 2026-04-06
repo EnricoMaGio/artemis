@@ -1,4 +1,4 @@
-﻿﻿<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8" />
@@ -15,7 +15,7 @@
         .loading-text { font-family: 'Orbitron', sans-serif; font-size: 0.8em; color: #00ccff; letter-spacing: 4px; }
         #info-panel { flex: 0 0 auto; padding: 15px 5px; display: grid; grid-template-columns: 1.2fr 0.9fr 0.9fr; gap: 5px; background: #080808; border-bottom: 1px solid #222; }
         #plot-container { flex: 0 0 55vh; width: 100%; position: relative; }
-        #controls { flex: 1 1 auto; padding: 10px 30px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
+        #controls { flex: 1 1 auto; padding: 10px 15px; display: flex; flex-direction: column; justify-content: center; padding-bottom: calc(var(--safe-bottom) + 15px); }
         .data-block { text-align: center; }
         .label { font-family: 'Orbitron', sans-serif; font-size: 0.5em; color: #00ccff; text-transform: uppercase; letter-spacing: 1.5px; }
         .value { font-size: 0.9em; font-weight: bold; margin-top: 4px; color: #fff; font-family: monospace; }
@@ -24,19 +24,20 @@
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
         #plot { width: 100%; height: 100%; }
         
-        .btn-group { display: flex; gap: 5px; margin-top: 10px; }
+        .btn-group { display: flex; gap: 4px; margin-top: 10px; }
         .nav-btn { 
             flex: 1;
             background: rgba(0, 204, 255, 0.1); 
             border: 1px solid #00ccff; 
             color: #00ccff; 
             font-family: 'Orbitron', sans-serif; 
-            font-size: 0.55em; 
-            padding: 10px 2px; 
+            font-size: 0.45rem; /* Smaller font for mobile */
+            padding: 8px 1px;   /* Tighter padding */
             cursor: pointer; 
             transition: 0.3s;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
         }
         .nav-btn:hover { background: rgba(0, 204, 255, 0.3); }
     </style>
@@ -188,19 +189,8 @@
             slider.value = moonClosestIndex;
             const p = missionData[moonClosestIndex];
             
-            // Vector from Earth(0,0,0) to Moon
-            const mag = Math.sqrt(p.mx**2 + p.my**2 + p.mz**2);
-            const ux = p.mx / mag;
-            const uy = p.my / mag;
-            const uz = p.mz / mag;
-
-            // Positioning the camera very specifically:
-            // Center on Earth (0,0,0) to keep it in frame.
-            // Move eye along the line extending from Earth through the Moon.
-            // Zoom in significantly (small multiplier like 1.1) to create the stack effect.
             const farsideCamera = {
-                eye: { x: -0.8723140987660083 *0.9, y:  
-0.36 *0.9, z: -0.4813424309516603*0.9 },
+                eye: { x: -0.8723140987660083 *0.9, y: 0.36 *0.9, z: -0.4813424309516603*0.9 },
                 center: { x: 0, y: 0, z: 0 },
                 up: { x: 0, y: 0, z: 1 }
             };
