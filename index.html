@@ -188,17 +188,18 @@
             slider.value = moonClosestIndex;
             const p = missionData[moonClosestIndex];
             
-            // Vector logic: Position camera further out along the Moon-Earth line
-            // Normalize the vector from Earth (0,0,0) to Moon (p.mx, p.my, p.mz)
+            // Vector from Earth(0,0,0) to Moon
             const mag = Math.sqrt(p.mx**2 + p.my**2 + p.mz**2);
             const ux = p.mx / mag;
             const uy = p.my / mag;
             const uz = p.mz / mag;
 
-            // Place eye behind the moon looking back at (0,0,0)
-            // Values are relative to the center of the scene
+            // Positioning the camera very specifically:
+            // Center on Earth (0,0,0) to keep it in frame.
+            // Move eye along the line extending from Earth through the Moon.
+            // Zoom in significantly (small multiplier like 1.1) to create the stack effect.
             const farsideCamera = {
-                eye: { x: ux * 1.5, y: uy * 1.5, z: uz * 1.5 },
+                eye: { x: ux * 1.15, y: uy * 1.15, z: uz * 1.15 },
                 center: { x: 0, y: 0, z: 0 },
                 up: { x: 0, y: 0, z: 1 }
             };
