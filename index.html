@@ -24,21 +24,22 @@
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: #00ccff; margin-top: -8px; box-shadow: 0 0 8px rgba(0,204,255,0.6); }
         #plot { width: 100%; height: 100%; }
         
-        /* New Button Style */
-        #moon-btn { 
+        /* Button Container and Style */
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        .nav-btn { 
+            flex: 1;
             background: rgba(0, 204, 255, 0.1); 
             border: 1px solid #00ccff; 
             color: #00ccff; 
             font-family: 'Orbitron', sans-serif; 
             font-size: 0.6em; 
-            padding: 8px; 
-            margin-top: 10px; 
+            padding: 10px 5px; 
             cursor: pointer; 
             transition: 0.3s;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-        #moon-btn:hover { background: rgba(0, 204, 255, 0.3); }
+        .nav-btn:hover { background: rgba(0, 204, 255, 0.3); }
     </style>
 </head>
 <body>
@@ -52,14 +53,18 @@
     <div id="controls">
         <div class="label">Mission Timeline</div>
         <input type="range" id="time-slider" min="0" value="0" step="1">
-        <button id="moon-btn">Closest Approach to Moon</button>
+        <div class="btn-group">
+            <button id="moon-btn" class="nav-btn">Closest Moon Approach</button>
+            <button id="now-btn" class="nav-btn">Current Time</button>
+        </div>
     </div>
 
     <script>
         let missionData = [], fullX, fullY, fullZ;
-        let moonClosestIndex = 0; // Store the index for jump
+        let moonClosestIndex = 0;
         const slider = document.getElementById('time-slider');
         const moonBtn = document.getElementById('moon-btn');
+        const nowBtn = document.getElementById('now-btn');
         const dateLabel = document.getElementById('current-date');
         const distEarthLabel = document.getElementById('current-dist-earth');
         const distMoonLabel = document.getElementById('current-dist-moon');
@@ -129,6 +134,15 @@
             ], layout);
         }
 
+        function goToCurrentTime() {
+            const now = new Date().getTime();
+            let index = missionData.findIndex(d => new Date(d.t).getTime() >= now);
+            if (index === -1) index = missionData.length - 1; // End of mission
+            if (index < 0) index = 0;
+            slider.value = index;
+            updatePlot(index);
+        }
+
         async function init() {
             try {
                 const response = await fetch('missionData.json');
@@ -149,13 +163,8 @@
                     }
                 });
 
-                const now = new Date().getTime();
-                let openIndex = missionData.findIndex(d => new Date(d.t).getTime() >= now);
-                if (openIndex <= 0) openIndex = 0;
-                slider.value = openIndex;
-
                 await Plotly.newPlot('plot', [], layout, {responsive: true, displayModeBar: true});
-                updatePlot(openIndex);
+                goToCurrentTime();
                 
                 setTimeout(() => {
                     loadingScreen.style.opacity = '0';
@@ -170,6 +179,7 @@
             slider.value = moonClosestIndex;
             updatePlot(moonClosestIndex);
         };
+        nowBtn.onclick = goToCurrentTime;
         window.addEventListener('resize', () => Plotly.Plots.resize('plot'));
     </script>
 </body>
